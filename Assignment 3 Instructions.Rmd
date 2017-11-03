@@ -21,7 +21,7 @@ library(ggplot2)
 Now, upload the file "Class_Motivation.csv" from the Assignment 3 Repository as a data frame called "K1""
 ```{r}
 
-K1 <- read.table(...)
+K1 <- Class_Motivation
 
 ```
 
@@ -73,7 +73,8 @@ Also, we need to choose the number of clusters we think are in the data. We will
 
 ```{r}
 
-fit <- kmeans(K3, 2) 
+fit <- kmeans(K3, 2)
+hit <- kmeans(K3, 3)
 
 #We have created an object called "fit" that contains all the details of our clustering including which observations belong to each cluster.
 
@@ -81,14 +82,16 @@ fit <- kmeans(K3, 2)
 
 fit$cluster
 
+
 #We can also attach these clusters to te original dataframe by using the "data.frame" command to create a new data frame called K4.
 
 K4 <- data.frame(K3, fit$cluster)
+K4.5 <- data.frame(K3, hit$cluster)
 
 #Have a look at the K4 dataframe. Lets change the names of the variables to make it more convenient with the names() command.
 
 names(K4) <- c("1", "2", "3", "4", "5", "cluster") #c() stands for concatonate and it creates a vector of anything, in this case a vector of names.
-
+names(K4.5) <-c("1", "2", "3", "4", "5", "cluster")
 
 ```
 
@@ -98,7 +101,7 @@ First lets use tidyr to convert from wide to long format.
 ```{r}
 
 K5 <- tidyr::gather(K4, "week", "motivation", 1:5)
-
+K5.5 <- tidyr::gather(K4.5, "week", "motivation", 1:5)
 ```
 
 Now lets use dplyr to average our motivation values by week and by cluster.
@@ -107,6 +110,8 @@ Now lets use dplyr to average our motivation values by week and by cluster.
 
 K6 <- K5 %>% group_by(week, cluster)
 K6 <- summarise(K6, avg = mean(motivation))
+K6.5 <- K5.5 %>% group_by(week, cluster)
+K6.5 <- summarise(K6.5, avg = mean(motivation))
 
 ```
 
@@ -125,9 +130,9 @@ Likewise, since "cluster" is not numeric but rather a categorical label we want 
 ```{r}
 
 K6$week <- as.numeric(K6$week)
-
+K6.5$week <- as.numeric(K6.5$week)
 K6$cluster <- as.factor(K6$cluster)
-
+K6.5$cluster <- as.factor(K6.5$cluster)
 ```
 
 Now we can plot our line plot using the ggplot command, "ggplot()".
@@ -142,6 +147,10 @@ Now we can plot our line plot using the ggplot command, "ggplot()".
 ggplot(K6, aes(week, avg, colour = cluster)) + geom_line() + xlab("Week") + ylab("Average Motivation")
 
 ```
+```{r}
+ggplot(K6.5, aes(week, avg, colour = cluster)) + geom_line() + xlab("Week") + ylab("Average Motivation")
+```
+
 
 What patterns do you see in the plot?
 
@@ -159,6 +168,108 @@ Once you have done this, save both of your plots to the Assignment 5 file. Creat
 ##Part II
 
 Now, try to do the same for the data [collected in class](https://tccolumbia.qualtrics.com/SE/?SID=SV_6RRqlSAM6lZWYQt). Create two groups of clusters, the answers to the questions and regions where people grew up. 
+
+```{r}
+library(data.table)
+library(purrr)
+library(geonames)
+L1<-HUDK4050_2017_Cluster_Survey
+```
+
+```{r}
+L2 <- dplyr::select(L1, 3:15)
+L2[is.na(L2)] <- "Jakarta"  
+```
+
+```{r}
+options(geonamesUsername = "an2825")
+places <- c("Beijing", "Beijing", "Beijing", "Chongqing", "Guangdong", "Guangdong", "Hubei", "Hubei", "Jiangsu", "Liaoning", "Liaoning", "Shandong", "Shanghai", "Zhejiang", "Zhejiang", "Zhejiang")
+get_coords_C <- function(name, country, fcode) {
+  res <- GNsearch(name_equals = name, country = country, fcode = fcode)  
+  out <- data.frame(name = res$toponymName, lat = res$lat, lon = res$lng)
+  return(out)  }
+
+GNresult_C <- places %>% 
+  map(get_coords_C, country = "CN", fcode = "ADM1") %>% 
+  rbindlist()
+
+places <- c("Taiwan")
+get_coords_T <- function(name, country, fcode) {
+  res <- GNsearch(name_equals = name, country = country, fcode = fcode)  
+  out <- data.frame(name = res$toponymName, lat = res$lat, lon = res$lng)
+  return(out)  }
+
+GNresult_T <- places %>% 
+  map(get_coords_T, country = "TW", fcode = "ADM1") %>% 
+  rbindlist()
+
+places <- c("Florida", "Mississippi", "California", "Florida", "Illinois", "North Carolina", "Ohio")
+get_coords_A <- function(name, country, fcode) {
+  res <- GNsearch(name_equals = name, country = country, fcode = fcode)  
+  out <- data.frame(name = res$toponymName, lat = res$lat, lon = res$lng)
+  return(out)  }
+
+GNresult_A <- places %>% 
+  map(get_coords_A, country = "US", fcode = "ADM1") %>% 
+  rbindlist()
+
+places <- c("Jakarta")
+get_coords_I <- function(name, country, fcode) {
+  res <- GNsearch(name_equals = name, country = country, fcode = fcode)  
+  out <- data.frame(name = res$toponymName, lat = res$lat, lon = res$lng)
+  return(out)  }
+
+GNresult_I <- places %>% 
+  map(get_coords_I, country = "ID", fcode = "ADM1") %>% 
+  rbindlist()
+```
+
+```{r}
+L3<-bind_rows(GNresult_A, GNresult_T, GNresult_C, GNresult_I)
+colnames(L3)[colnames(L3) == 'name'] <- 'state.grew'
+```
+
+```{r}
+L3$state.grew<-ifelse(
+  L3$state.grew=="Beijing Shi","Beijing", 
+  ifelse(L3$state.grew=="Chongqing Shi", "Chongqing",
+  ifelse(L3$state.grew=="Guangdong Sheng", "Guangdong",
+  ifelse(L3$state.grew=="Hubei Sheng", "Hubei",
+  ifelse(L3$state.grew=="Jiangsu Sheng", "Jiangsu",
+  ifelse(L3$state.grew=="Liaoning Sheng", "Liaoning",
+  ifelse(L3$state.grew=="Shandong Sheng", "Shandong",
+  ifelse(L3$state.grew=="Shanghai Shi", "Shanghai",
+  ifelse(L3$state.grew=="Zhejiang Sheng", "Zhejiang",
+  ifelse(L3$state.grew=="Daerah Khusus Ibukota Jakarta", "Jakarta",
+  ifelse(L3$state.grew=="Florida", "Florida",
+  ifelse(L3$state.grew=="Ohio", "Ohio",
+  ifelse(L3$state.grew=="Mississippi", "Mississippi",
+  ifelse(L3$state.grew=="California", "California",
+  ifelse(L3$state.grew=="Illinois", "Illinois",
+  ifelse(L3$state.grew=="North Carolina", "North Carolina", "Taiwan"))))))))))))))))
+           
+```
+
+```{r}
+L4<-left_join(L2, L3 , by = "state.grew")
+L4<-unique(L4)
+```
+
+```{r}
+L4$cat<-ifelse(L4$cat=="Yes",1,0) 
+L4$`gif-jiff`<-ifelse(L4$`gif-jiff`=="g-iff",1,0) 
+```
+
+```{r}
+L5 <- dplyr::select(L4, 1:10, 14:15)
+```
+
+```{r}
+L5$cat <- as.numeric(L5$cat)
+L5$`gif-jiff` <- as.numeric(L5$`gif-jiff`)
+L5$lat <- as.numeric(L5$lat)
+L5$lon <- as.numeric(L5$lon)
+```
 
 ##Part III
 
@@ -182,3 +293,63 @@ Q12 - How many states have you visited in the US?
 Q13 - What city/town did you grow up in?  
 Q14 - What state/province did you grow up in?  
 Q15 - What country did you grow up in?  
+
+```{r}
+L5.5<-select(L5, 1:10)
+L5.5a<-L5.5
+L5.5<-scale(L5.5)
+bita<-kmeans(L5.5,6)
+L6 <- data.frame(L5.5, bita$cluster)
+names(L6) <- c("1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "question_cluster")
+L7 <- tidyr::gather(L6, "question", "score", 1:10)
+L7 <- L7 %>% group_by(question, question_cluster)
+L7 <- summarise(L7, avg = mean(score))
+```
+
+```{r}
+k.max <- 15
+data <- L5.5
+wss <- sapply(1:k.max, 
+              function(k){kmeans(data, k, nstart=50,iter.max = 15 )$tot.withinss})
+wss
+plot(1:k.max, wss,
+     type="b", pch = 19, frame = FALSE, 
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+```
+
+```{r}
+L5.7<-select(L5, 11:12)
+L5.7<-scale(L5.7)
+questions<-kmeans(L5.5,6)
+
+```
+
+```{r}
+library("ggplot2")
+k.maxa <- 15
+dataa <- L5.7
+wssa <- sapply(1:k.maxa, 
+              function(k){kmeans(dataa, k, nstart=50,iter.max = 15 )$tot.withinss})
+wss
+plot(1:k.maxa, wssa,
+     type="b", pch = 19, frame = FALSE, 
+     xlab="Number of clusters K",
+     ylab="Total within-clusters sum of squares")
+```
+
+```{r}
+coordinates <- kmeans(L5.7, 4)
+L5.9<- data.frame(L5.5, coordinates$cluster)
+```
+
+```{r}
+library(cluster)
+clusplot(L5.9, questions$cluster, color=TRUE, col.p=L5.9$coordinates.cluster, shade=FALSE, labels=2, lines=0)
+```
+
+```{r}
+library(vcd)
+L8 <- data.frame(L5.9, questions$cluster)
+mosaic(~ coordinates.cluster + questions.cluster, data=L8, shade=TRUE)
+```
